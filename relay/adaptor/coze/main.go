@@ -111,6 +111,11 @@ func StreamHandler(c *gin.Context, resp *http.Response) (*model.ErrorWithStatusC
 	var responseText string
 	createdTime := helper.GetTimestamp()
 	scanner := bufio.NewScanner(resp.Body)
+
+	const maxCapacity = 2 * 1024 * 1024
+	buf := make([]byte, maxCapacity)
+	scanner.Buffer(buf, maxCapacity)
+
 	scanner.Split(bufio.ScanLines)
 
 	common.SetEventStreamHeaders(c)
