@@ -112,19 +112,26 @@ func requestAccessToken(jwtToken string) (string, error) {
 	body, _ := ioutil.ReadAll(resp.Body)
 	logger.SysLogf("access token request response: %s", string(body))
 
+	// Check for successful status code
 	if resp.StatusCode != 200 {
 		return "", fmt.Errorf("token request failed, status=%d, body=%s", resp.StatusCode, string(body))
 	}
 
+	// Adjust structure to match the actual response format
 	var result struct {
-		Data struct {
-			AccessToken string `json:"access_token"`
-		} `json:"data"`
+		AccessToken string `json:"access_token"`
+		ExpiresIn   int64  `json:"expires_in"`
+		TokenType   string `json:"token_type"`
 	}
+
 	if err := json.Unmarshal(body, &result); err != nil {
 		return "", fmt.Errorf("JSON unmarshal failed: %w", err)
 	}
-	return result.Data.AccessToken, nil
+
+	// Log the token and expiration time
+	logger.SysLogf("Access Token: %s, Expires In: %d", result.AccessToken, result.ExpiresIn)
+
+	return result.AccessToken, nil
 }
 
 // 更新渠道表
