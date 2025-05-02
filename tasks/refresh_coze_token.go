@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/golang-jwt/jwt"
+	"github.com/songquanpeng/one-api/common/logger"
 	"github.com/songquanpeng/one-api/model"
 	"io/ioutil"
 	"net/http"
@@ -103,11 +104,11 @@ func refreshCoze() {
 		}
 		err = updateChannelKey(accessToken)
 		if err == nil {
-			fmt.Println("刷新 Coze Token 成功")
+			logger.SysLogf("refresh success")
 			return
 		}
 	}
-	fmt.Println("刷新 Coze Token 失败:", err)
+	logger.FatalLog("refresh error" + err.Error())
 }
 
 func RefreshCozeTokenTask() {
