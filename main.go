@@ -118,10 +118,11 @@ func main() {
 		port = strconv.Itoa(*common.Port)
 	}
 	logger.SysLogf("server started on http://localhost:%s", port)
+	// 启动定时任务，定时刷新coze的密钥
+	tasks.RefreshCozeTokenTask()
+
 	err = server.Run(":" + port)
 	if err != nil {
 		logger.FatalLog("failed to start HTTP server: " + err.Error())
 	}
-	// 启动定时任务，定时刷新coze的密钥
-	tasks.RefreshCozeTokenTask()
 }
