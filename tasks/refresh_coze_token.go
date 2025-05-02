@@ -90,34 +90,32 @@ func updateChannelKey(token string) error {
 	return model.DB.Exec("UPDATE channels SET `key` = ? WHERE name = 'coze'", token).Error
 }
 
-// 每隔10h刷新一次
+func refreshCoze() {
+	var err error
+	for i := 0; i < 3; i++ {
+		jwtToken, err := generateJWT()
+		if err != nil {
+			continue
+		}
+		accessToken, err := requestAccessToken(jwtToken)
+		if err != nil {
+			continue
+		}
+		err = updateChannelKey(accessToken)
+		if err == nil {
+			fmt.Println("刷新 Coze Token 成功")
+			return
+		}
+	}
+	fmt.Println("刷新 Coze Token 失败:", err)
+}
+
 func RefreshCozeTokenTask() {
-	ticker := time.NewTicker(10 * time.Hour) // 实现定时任务
+	ticker := time.NewTicker(10 * time.Hour)
 	go func() {
-		for {
-			var err error
-			for i := 0; i < 3; i++ {
-				// 创建jwt
-				jwtToken, err := generateJWT()
-				if err != nil {
-					continue
-				}
-				// 通过jwt请求申请access_token
-				accessToken, err := requestAccessToken(jwtToken)
-				if err != nil {
-					continue
-				}
-				// 更新数据库渠道信息的key字段
-				err = updateChannelKey(accessToken)
-				if err == nil {
-					fmt.Println("刷新 Coze Token 成功")
-					break
-				}
-			}
-			if err != nil {
-				fmt.Println("刷新 Coze Token 失败:", err)
-			}
-			<-ticker.C
+		refreshCoze() // 启动时先执行一次
+		for range ticker.C {
+			refreshCoze() // 每 10 小时执行一次
 		}
 	}()
 }
