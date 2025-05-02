@@ -165,6 +165,7 @@ func refreshCoze() {
 			continue
 		}
 		logger.SysLogf("Coze token refreshed and saved to DB successfully")
+		logger.SysLogf("Coze token is : " + accessToken)
 		return
 	}
 	logger.FatalLog("refreshCoze failed after 3 attempts: " + fmt.Sprint(err))
