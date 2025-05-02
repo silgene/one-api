@@ -110,6 +110,7 @@ func requestAccessToken(jwtToken string) (string, error) {
 	defer resp.Body.Close()
 
 	body, _ := ioutil.ReadAll(resp.Body)
+	logger.SysLogf("access token request response: %s", string(body))
 
 	if resp.StatusCode != 200 {
 		return "", fmt.Errorf("token request failed, status=%d, body=%s", resp.StatusCode, string(body))
@@ -151,6 +152,7 @@ func refreshCoze() {
 			continue
 		}
 		logger.SysLogf("generateJWT succeeded")
+		logger.SysLogf("JWT : " + jwtToken)
 
 		accessToken, err := requestAccessToken(jwtToken)
 		if err != nil {
