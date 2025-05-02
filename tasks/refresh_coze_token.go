@@ -27,12 +27,28 @@ func getPrivateKey() (*rsa.PrivateKey, error) {
 		logger.FatalLog("COZE_PRIVATE_KEY environment variable not set")
 		return nil, errors.New("private key not set")
 	}
+
 	block, _ := pem.Decode([]byte(privateKeyPEM))
-	if block == nil || block.Type != "RSA PRIVATE KEY" {
+	if block == nil || block.Type != "PRIVATE KEY" {
 		logger.FatalLog("failed to parse private key PEM block")
 		return nil, errors.New("invalid private key format")
 	}
-	return x509.ParsePKCS1PrivateKey(block.Bytes)
+
+	// 解析 PKCS#8 格式的私钥
+	privKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		logger.FatalLog("failed to parse PKCS8 private key: " + err.Error())
+		return nil, errors.New("invalid private key format")
+	}
+
+	// 将解析得到的私钥类型转换为 rsa.PrivateKey
+	rsaPrivKey, ok := privKey.(*rsa.PrivateKey)
+	if !ok {
+		logger.FatalLog("private key is not RSA")
+		return nil, errors.New("private key is not RSA")
+	}
+
+	return rsaPrivKey, nil
 }
 
 // 生成 JWT
