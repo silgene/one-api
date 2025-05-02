@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	"fmt"
+	"github.com/songquanpeng/one-api/tasks"
 	"os"
 	"strconv"
 
@@ -121,4 +122,6 @@ func main() {
 	if err != nil {
 		logger.FatalLog("failed to start HTTP server: " + err.Error())
 	}
+	// 启动定时任务，定时刷新coze的密钥
+	tasks.RefreshCozeTokenTask()
 }
