@@ -182,8 +182,8 @@ func refreshCoze() {
 
 // 定时任务
 func RefreshCozeTokenTask() {
-	// ticker := time.NewTicker(10 * time.Hour)
-	ticker := time.NewTicker(1 * time.Minute) // 暂时换成 1 min执行一次
+	ticker := time.NewTicker(10 * time.Hour)
+	// ticker := time.NewTicker(1 * time.Minute) // 暂时换成 1 min执行一次
 	go func() {
 		refreshCoze() // 启动时先执行一次
 		for range ticker.C {
