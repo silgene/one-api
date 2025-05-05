@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -24,27 +25,21 @@ const cozeTokenURL = "https://api.coze.cn/api/permission/oauth2/token"
 func getPrivateKey() (*rsa.PrivateKey, error) {
 	privateKeyPEM := os.Getenv("COZE_PRIVATE_KEY")
 	if privateKeyPEM == "" {
-		logger.FatalLog("COZE_PRIVATE_KEY environment variable not set")
-		return nil, errors.New("private key not set")
+		return nil, errors.New("COZE_PRIVATE_KEY environment variable not set")
 	}
 
 	block, _ := pem.Decode([]byte(privateKeyPEM))
 	if block == nil || block.Type != "PRIVATE KEY" {
-		logger.FatalLog("failed to parse private key PEM block")
-		return nil, errors.New("invalid private key format")
+		return nil, errors.New("failed to parse private key PEM block")
 	}
 
-	// 解析 PKCS#8 格式的私钥
 	privKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	if err != nil {
-		logger.FatalLog("failed to parse PKCS8 private key: " + err.Error())
-		return nil, errors.New("invalid private key format")
+		return nil, fmt.Errorf("failed to parse PKCS8 private key: %w", err)
 	}
 
-	// 将解析得到的私钥类型转换为 rsa.PrivateKey
 	rsaPrivKey, ok := privKey.(*rsa.PrivateKey)
 	if !ok {
-		logger.FatalLog("private key is not RSA")
 		return nil, errors.New("private key is not RSA")
 	}
 
@@ -60,17 +55,15 @@ func generateJWT() (string, error) {
 
 	appID := os.Getenv("COZE_APP_ID")
 	if appID == "" {
-		logger.FatalLog("COZE_APP_ID environment variable not set")
-		return "", errors.New("appID not set")
+		return "", errors.New("COZE_APP_ID environment variable not set")
 	}
 
 	kid := os.Getenv("COZE_KID")
 	if kid == "" {
-		logger.FatalLog("COZE_KID environment variable not set")
-		return "", errors.New("kid not set")
+		return "", errors.New("COZE_KID environment variable not set")
 	}
 
-	sessionName := fmt.Sprintf("session-%d", time.Now().UnixNano())
+	sessionName := fmt.Sprintf("session-%s", uuid.New().String())
 
 	claims := jwt.MapClaims{
 		"iss":          appID,
@@ -112,12 +105,10 @@ func requestAccessToken(jwtToken string) (string, error) {
 	body, _ := ioutil.ReadAll(resp.Body)
 	logger.SysLogf("access token request response: %s", string(body))
 
-	// Check for successful status code
 	if resp.StatusCode != 200 {
 		return "", fmt.Errorf("token request failed, status=%d, body=%s", resp.StatusCode, string(body))
 	}
 
-	// Adjust structure to match the actual response format
 	var result struct {
 		AccessToken string `json:"access_token"`
 		ExpiresIn   int64  `json:"expires_in"`
@@ -128,16 +119,14 @@ func requestAccessToken(jwtToken string) (string, error) {
 		return "", fmt.Errorf("JSON unmarshal failed: %w", err)
 	}
 
-	// Log the token and expiration time
 	logger.SysLogf("Access Token: %s, Expires In: %d", result.AccessToken, result.ExpiresIn)
-
 	return result.AccessToken, nil
 }
 
 // 更新渠道表
 func updateChannelKey(token string) error {
 	logger.SysLogf("updating channel key in database...")
-	result := model.DB.Exec("UPDATE channels SET `key` = ? WHERE name = 'coze'", token)
+	result := model.DB.Exec("UPDATE channels SET `key` = ? WHERE name like '%coze%'", token)
 	if result.Error != nil {
 		return fmt.Errorf("database update failed: %w", result.Error)
 	}
@@ -149,45 +138,49 @@ func updateChannelKey(token string) error {
 
 // 刷新 Coze Token 主流程
 func refreshCoze() {
-	var err error
+	var lastErr error
 	for i := 0; i < 3; i++ {
 		logger.SysLogf("========== Refresh attempt #%d ==========", i+1)
 
 		jwtToken, err := generateJWT()
 		if err != nil {
-			logger.FatalLog("generateJWT failed: %v" + err.Error())
+			logger.SysLogf("generateJWT failed: %v", err)
+			lastErr = err
 			continue
 		}
 		logger.SysLogf("generateJWT succeeded")
-		logger.SysLogf("JWT : " + jwtToken)
 
 		accessToken, err := requestAccessToken(jwtToken)
 		if err != nil {
-			logger.FatalLog("requestAccessToken failed: %v" + err.Error())
+			logger.SysLogf("requestAccessToken failed: %v", err)
+			lastErr = err
 			continue
 		}
 		logger.SysLogf("requestAccessToken succeeded")
 
 		err = updateChannelKey(accessToken)
 		if err != nil {
-			logger.FatalLog("updateChannelKey failed: %v" + err.Error())
+			logger.SysLogf("updateChannelKey failed: %v", err)
+			lastErr = err
 			continue
 		}
+
 		logger.SysLogf("Coze token refreshed and saved to DB successfully")
 		logger.SysLogf("Coze token is : " + accessToken)
 		return
 	}
-	logger.FatalLog("refreshCoze failed after 3 attempts: " + fmt.Sprint(err))
+
+	logger.SysLogf("refreshCoze failed after 3 attempts: %v", lastErr)
 }
 
-// 定时任务
+// 定时任务入口
 func RefreshCozeTokenTask() {
-	ticker := time.NewTicker(10 * time.Hour)
-	// ticker := time.NewTicker(1 * time.Minute) // 暂时换成 1 min执行一次
+	ticker := time.NewTicker(12 * time.Hour)
+	// ticker := time.NewTicker(1 * time.Minute) // 用于调试
 	go func() {
-		refreshCoze() // 启动时先执行一次
+		refreshCoze() // 启动先执行一次
 		for range ticker.C {
-			refreshCoze() // 每 10 小时执行一次
+			refreshCoze()
 		}
 	}()
 }
